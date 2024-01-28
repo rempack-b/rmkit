@@ -16,7 +16,15 @@ namespace ui:
     // every widget has access to fb through self.fb and therefore can (and
     // should) draw directly to the framebuffer
     static framebuffer::FB* fb = NULL
+
+    // variable: children
+    // a list of widgets that belong to this widget
+    // children will be recursively rendered and updated immediately after this widget
     vector<shared_ptr<Widget>> children
+
+    // variable: parent
+    // optionally holds a reference to the next widget up in the hierarchy
+    Widget* parent = NULL
 
     MOUSE_EVENTS mouse
     GESTURE_EVENTS_DELEGATE gestures = { &mouse }
@@ -110,6 +118,18 @@ namespace ui:
     virtual void show():
       visible = true
 
+    // function: on_added_to_scene
+    // called when a widget is added to a scene
+    // this function is also called recursively on any children at the same time
+    /// I was going to pass a pointer to the scene here, but that's a cyclic dependency I don't want to tackle today
+    virtual void on_added_to_scene():
+      pass
+
+    // function: on_transforms_changed
+    // called when transforms are changed by calling set_coords or restore_coords
+    virtual void on_transforms_changed():
+      pass
+
     // {{{ SIGNAL HANDLERS
     // function: ignore_event
     // this function is called before a widget is given an event
@@ -183,14 +203,21 @@ namespace ui:
       return true
 
     void set_coords(int a=-1, b=-1, c=-1, d=-1):
+      updated := false
       if a != -1:
         self.x = a
+        updated = true
       if b != -1:
         self.y = b
+        updated = true
       if c != -1:
         self.w = c
+        updated = true
       if d != -1:
         self.h = d
+        updated = true
+      if updated:
+        on_transforms_changed()
 
     // this restores the coordinates of a widget to the coords it was initially
     // given when it was constructed. this could be used to support reflowing
@@ -200,6 +227,7 @@ namespace ui:
       y = _y
       w = _w
       h = _h
+      on_transforms_changed()
 
     // function: get_render_size
     // gets the size of the rendered widget. this is for variable sized widgets
@@ -207,3 +235,9 @@ namespace ui:
     // supplied text
     virtual tuple<int, int> get_render_size():
       return self.w, self.h
+
+    // function add_child
+    // adds a child widget and sets its parent to this
+    void add_child(shared_ptr<Widget> w):
+      w->parent = this
+      children.push_back(w)
