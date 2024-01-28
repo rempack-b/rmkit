@@ -32,7 +32,7 @@ namespace ui:
 
     void refresh():
       for auto ch : children:
-        ch->dirty = 1
+        ch->mark_redraw()
 
   class AbsLayout: public Layout:
     public:
@@ -99,6 +99,7 @@ namespace ui:
       w->y += self.start + self.y + padding
       w->x += self.x
       self.start += w->h + padding
+      w->on_transforms_changed()
       self.add(w)
 
     // function: pack_end
@@ -107,6 +108,7 @@ namespace ui:
       w->y = self.y + self.end - w->h - padding
       w->x += self.x
       self.end -= w->h + padding
+      w->on_transforms_changed()
       self.add(w)
 
     // function: pack_center
@@ -119,6 +121,7 @@ namespace ui:
       w->y = self.y + padding_y
       w->x += self.x
 
+      w->on_transforms_changed()
       self.add(w)
 
     // function: pack_start
@@ -176,6 +179,7 @@ namespace ui:
       w->x += self.start + self.x + padding
       w->y += self.y
       self.start += w->w + padding
+      w->on_transforms_changed()
       self.add(w)
 
     // function: pack_end
@@ -184,6 +188,7 @@ namespace ui:
       w->x = self.x + self.end - w->w - padding
       w->y += self.y
       self.end -= w->w + padding
+      w->on_transforms_changed()
       self.add(w)
 
     // function: pack_center
@@ -195,6 +200,7 @@ namespace ui:
         padding_x = leftover / 2
       w->x = self.x + padding_x
       w->y += self.y
+      w->on_transforms_changed()
       self.add(w)
 
     // function: pack_start
