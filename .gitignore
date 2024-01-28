@@ -12,4 +12,4 @@ tmp
 src/build/
 docs/html/
 .DS_Store
-.idea/*
+
