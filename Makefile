@@ -15,7 +15,7 @@ DOCKER_APPS=$(foreach app, $(APPS), $(app)_docker)
 SHA=$(shell git rev-parse --short HEAD)
 
 $(APPS): %: rmkit.h
-	cd src/${@} && make
+	cd src/${@} && $(MAKE)
 
 $(RESIM_APPS): %: rmkit.h
 	cd src/$(@:resim_%=%) && make resim

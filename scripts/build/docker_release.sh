@@ -3,7 +3,7 @@ TARGET=${TARGET:-rm}
 mkdir ${OUTDIR}
 docker run -i --rm -v "${PWD}/${OUTDIR}:/mnt/artifacts" rmkit /bin/bash << COMMANDS
 mkdir -p src/build
-TARGET=${TARGET} make
+TARGET=${TARGET} make -j30
 TARGET=${TARGET} make strip
 TARGET=${TARGET} make bundle
 mkdir -p /mnt/artifacts/${TARGET}/
