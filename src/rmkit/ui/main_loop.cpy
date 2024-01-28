@@ -338,6 +338,83 @@ namespace ui:
       if overlay_is_visible():
         display_scene = get_overlay()
 
+    static bool recurse_motion_event(input::SynMotionEvent &ev, shared_ptr<Widget> widget):
+      if widget->ignore_event(ev) || !widget->visible:
+          return false
+
+      if ev._stop_propagation:
+        return false
+
+      is_hit := widget->is_hit(ev.x, ev.y)
+      mouse_down := ev.left > 0 || ev.right > 0 || ev.middle > 0
+      prev_mouse_down := widget->mouse_down
+      prev_mouse_inside := widget->mouse_inside
+      prev_mouse_x := widget->mouse_x
+      prev_mouse_y := widget->mouse_y
+      hit_widget := false
+
+      widget->mouse_down_first = (first_mouse_down && mouse_down && is_hit) || widget->mouse_down_first
+      widget->mouse_down = widget->mouse_down_first && mouse_down && is_hit
+      widget->mouse_inside = is_hit
+
+      if is_hit:
+        if widget->mouse_down:
+          widget->mouse_x = ev.x
+          widget->mouse_y = ev.y
+          // mouse move issued on is_hit
+          widget->mouse.move(ev)
+        else:
+          // we have mouse_move and mouse_hover
+          // hover is for stylus
+          widget->mouse.hover(ev)
+
+
+        // mouse down event
+        if !prev_mouse_down && mouse_down:
+          widget->mouse.down(ev)
+
+        // mouse up / click events
+        if prev_mouse_down && !mouse_down:
+          widget->mouse.up(ev)
+
+          if widget->mouse_down_first:
+            widget->mouse.click(ev)
+
+        // mouse enter event
+        if !prev_mouse_inside:
+          widget->mouse.enter(ev)
+
+        hit_widget = true
+      else:
+        // mouse leave event
+        if prev_mouse_inside:
+          widget->mouse.leave(ev)
+
+      if widget->children.size() && !ev._stop_propagation:
+        for auto ci = widget->children.rbegin(); ci != widget->children.rend(); ci++:
+          child := *ci
+          recurse_motion_event(ev, child)
+
+      return hit_widget
+
+    static void recurse_exit_event(input::SynMotionEvent &ev, shared_ptr<Widget> widget):
+      if widget->ignore_event(ev) || !widget->visible:
+        return
+
+      prev_mouse_inside := widget->mouse_inside
+      mouse_down := ev.left > 0 || ev.right > 0 || ev.middle > 0
+      is_hit := widget->is_hit(ev.x, ev.y)
+      widget->mouse_down = widget->mouse_down_first && mouse_down && is_hit
+      widget->mouse_inside = is_hit
+
+      if !is_hit:
+        if prev_mouse_inside:
+          widget->mouse.leave(ev)
+
+      if !mouse_down:
+        widget->mouse_down_first = false
+
+
     // TODO: refactor this into cleaner code
     // dispatch mouse / touch events to their widgets
     static int first_mouse_down = true;
@@ -357,76 +434,15 @@ namespace ui:
       widgets := display_scene->widgets;
       for auto it = widgets.rbegin(); it != widgets.rend(); it++:
         widget := *it
-        if widget->ignore_event(ev) || !widget->visible:
-          continue
-
+        hit_widget = recurse_motion_event(ev, widget)
         if ev._stop_propagation:
           break
-
-        is_hit = widget->is_hit(ev.x, ev.y)
-
-        prev_mouse_down := widget->mouse_down
-        prev_mouse_inside := widget->mouse_inside
-        prev_mouse_x := widget->mouse_x
-        prev_mouse_y := widget->mouse_y
-
-
-        widget->mouse_down_first = (first_mouse_down && mouse_down && is_hit) || widget->mouse_down_first
-        widget->mouse_down = widget->mouse_down_first && mouse_down && is_hit
-        widget->mouse_inside = is_hit
-
-        if is_hit:
-          if widget->mouse_down:
-            widget->mouse_x = ev.x
-            widget->mouse_y = ev.y
-            // mouse move issued on is_hit
-            widget->mouse.move(ev)
-          else:
-            // we have mouse_move and mouse_hover
-            // hover is for stylus
-            widget->mouse.hover(ev)
-
-
-          // mouse down event
-          if !prev_mouse_down && mouse_down:
-            widget->mouse.down(ev)
-
-          // mouse up / click events
-          if prev_mouse_down && !mouse_down:
-            widget->mouse.up(ev)
-
-            if widget->mouse_down_first:
-              widget->mouse.click(ev)
-
-          // mouse enter event
-          if !prev_mouse_inside:
-            widget->mouse.enter(ev)
-
-          hit_widget = true
-        else:
-          // mouse leave event
-          if prev_mouse_inside:
-            widget->mouse.leave(ev)
 
       // iterate over all widgets and register exit events even if we stop
       // propagation. also reset mouse_down_first if mouse_down is false
       for auto it = widgets.rbegin(); it != widgets.rend(); it++:
         widget := *it
-        if widget->ignore_event(ev) || !widget->visible:
-          continue
-
-        prev_mouse_inside := widget->mouse_inside
-
-        is_hit = widget->is_hit(ev.x, ev.y)
-        widget->mouse_down = widget->mouse_down_first && mouse_down && is_hit
-        widget->mouse_inside = is_hit
-
-        if !is_hit:
-          if prev_mouse_inside:
-            widget->mouse.leave(ev)
-
-        if !mouse_down:
-          widget->mouse_down_first = false
+        recurse_exit_event(ev, widget)
 
       if mouse_down:
         first_mouse_down = false
