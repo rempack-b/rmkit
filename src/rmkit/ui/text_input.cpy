@@ -58,9 +58,9 @@ namespace ui:
     void on_text_changed(string):
       self.dirty=1
     void render():
-      self.fb->draw_rect(self.x, self.y, self.w, self.h, BLACK, 0 /* fill */)
       ui::Text::render()
-
+    void render_border():
+      self.fb->draw_rect(self.x, self.y, self.w, self.h, BLACK, 0 /* fill */)
 
   // class: ui::TextArea
   // --- Prototype ---
