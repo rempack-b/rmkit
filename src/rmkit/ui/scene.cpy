@@ -28,13 +28,23 @@ namespace ui:
 
     // function: add
     // adds a widget to the scene
+    // also recursively adds any child widgets
     void add(Widget *w):
       widgets.push_back(shared_ptr<Widget>(w))
+      w->on_added_to_scene()
+      if w->children.size():
+        for auto ci = w->children.begin(); ci != w->children.end(); ci++:
+          add(*ci)
 
     // function: add
     // adds a widget to the scene
+    // also recursively adds any child widgets
     void add(shared_ptr<Widget> w):
       widgets.push_back(w)
+      w->on_added_to_scene()
+      if w->children.size():
+        for auto ci = w->children.begin(); ci != w->children.end(); ci++:
+          add(*ci)
 
     static void redraw(vector<shared_ptr<Widget>> &widgets):
       for auto it = widgets.begin(); it != widgets.end(); it++:

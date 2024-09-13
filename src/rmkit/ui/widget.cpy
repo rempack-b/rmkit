@@ -4,8 +4,32 @@
 #include "../util/signals.h"
 
 namespace ui:
-  class Rect:
+  // Class: ui::Widget
+  //
+  // The widget class is the base of all other widgets. A widget is typically
+  // a piece of UI that can receive inputs and draw to screen through the
+  // frame buffer
+  class Widget:
     public:
+
+    // variable: fb
+    // every widget has access to fb through self.fb and therefore can (and
+    // should) draw directly to the framebuffer
+    static framebuffer::FB* fb = NULL
+
+    // variable: children
+    // a list of widgets that belong to this widget
+    // children will be recursively rendered and updated immediately after this widget
+    vector<shared_ptr<Widget>> children
+
+    // variable: parent
+    // optionally holds a reference to the next widget up in the hierarchy
+    Widget* parent = NULL
+
+    MOUSE_EVENTS mouse
+    GESTURE_EVENTS_DELEGATE gestures = { &mouse }
+    KEY_EVENTS kbd
+
     // variables: x, y, w, h
     //
     // x - the x coordinate of the widget.
@@ -14,40 +38,6 @@ namespace ui:
     // h - the height of the widget
     int x, y, w, h
     int _x, _y, _w, _h // the original values the widget was instantiated with
-
-    Rect(int x,y,w,h): x(x), y(y), w(w), h(h), _x(x), _y(y), _w(w), _h(h):
-      pass
-
-    // this restores the coordinates of a widget to the coords it was initially
-    // given when it was constructed. this could be used to support reflowing
-    // widgets
-    void restore_coords():
-      x = _x
-      y = _y
-      w = _w
-      h = _h
-
-    virtual void on_reflow():
-      pass
-  
-  // Class: ui::Widget
-  //
-  // The widget class is the base of all other widgets. A widget is typically
-  // a piece of UI that can receive inputs and draw to screen through the
-  // frame buffer
-  class Widget : public Rect:
-    public:
-
-    // variable: fb
-    // every widget has access to fb through self.fb and therefore can (and
-    // should) draw directly to the framebuffer
-    static framebuffer::FB* fb = NULL
-    vector<shared_ptr<Widget>> children
-
-    MOUSE_EVENTS mouse
-    GESTURE_EVENTS_DELEGATE gestures = { &mouse }
-    KEY_EVENTS kbd
-
     int mouse_down = false, mouse_inside = false, mouse_down_first = false, mouse_x, mouse_y
     int dirty = 1
     bool visible = true
@@ -61,7 +51,7 @@ namespace ui:
     // y - the y coord of the top left of the widget
     // w - the width of the widget
     // h - the height of the widget
-    Widget(int x,y,w,h): Rect(x,y,w,h):
+    Widget(int x,y,w,h): x(x), y(y), w(w), h(h), _x(x), _y(y), _w(w), _h(h):
       self.install_signal_handlers()
 
     virtual ~Widget():
@@ -127,6 +117,18 @@ namespace ui:
     // shows the widget
     virtual void show():
       visible = true
+
+    // function: on_added_to_scene
+    // called when a widget is added to a scene
+    // this function is also called recursively on any children at the same time
+    /// I was going to pass a pointer to the scene here, but that's a cyclic dependency I don't want to tackle today
+    virtual void on_added_to_scene():
+      pass
+
+    // function: on_transforms_changed
+    // called when transforms are changed by calling set_coords or restore_coords
+    virtual void on_transforms_changed():
+      pass
 
     // {{{ SIGNAL HANDLERS
     // function: ignore_event
@@ -201,14 +203,31 @@ namespace ui:
       return true
 
     void set_coords(int a=-1, b=-1, c=-1, d=-1):
+      updated := false
       if a != -1:
         self.x = a
+        updated = true
       if b != -1:
         self.y = b
+        updated = true
       if c != -1:
         self.w = c
+        updated = true
       if d != -1:
         self.h = d
+        updated = true
+      if updated:
+        on_transforms_changed()
+
+    // this restores the coordinates of a widget to the coords it was initially
+    // given when it was constructed. this could be used to support reflowing
+    // widgets
+    void restore_coords():
+      x = _x
+      y = _y
+      w = _w
+      h = _h
+      on_transforms_changed()
 
     // function: get_render_size
     // gets the size of the rendered widget. this is for variable sized widgets
@@ -216,3 +235,9 @@ namespace ui:
     // supplied text
     virtual tuple<int, int> get_render_size():
       return self.w, self.h
+
+    // function add_child
+    // adds a child widget and sets its parent to this
+    void add_child(shared_ptr<Widget> w):
+      w->parent = this
+      children.push_back(w)
