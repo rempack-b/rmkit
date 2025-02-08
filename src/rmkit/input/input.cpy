@@ -22,10 +22,14 @@ namespace input:
   extern int ipc_fd[2] = { -1, -1 };
   extern bool CRASH_ON_BAD_DEVICE = (getenv("RMKIT_CRASH_ON_BAD_DEVICE") != NULL)
 
-  template<class T, class EV>
-  class InputClass:
+  class IInputClass:
     public:
-    int fd
+    int fd = 0
+    bool reopen = false
+
+  template<class T, class EV>
+  class InputClass : public IInputClass:
+    public:
     input_event ev_data[64]
     T prev_ev, event
     vector<T> events
@@ -55,10 +59,14 @@ namespace input:
 
 
 
-    void handle_event_fd():
+    int handle_event_fd():
       int bytes = read(fd, ev_data, sizeof(input_event) * 64);
+      if bytes == -1:
+        debug "ERRNO", errno, strerror(errno)
       if bytes < sizeof(input_event) || bytes == -1:
-        return
+        if errno == ENODEV:
+          self.reopen = true
+        return bytes
 
       #ifndef DEV
       // in DEV mode we allow event coalescing between calls to read() for
@@ -88,6 +96,8 @@ namespace input:
           if !syn_dropped:
             event.update(ev_data[i])
 
+      return 0
+
   class Input:
     private:
 
@@ -104,8 +114,11 @@ namespace input:
     vector<SynKeyEvent> all_key_events
 
     Input():
-      FD_ZERO(&rdfs)
+      open_devices()
 
+    void open_devices():
+      close_devices()
+      FD_ZERO(&rdfs)
       // dev only
       // used by remarkable
       #ifdef REMARKABLE
@@ -141,11 +154,14 @@ namespace input:
       self.has_stylus = supports_stylus()
       return
 
+    void close_devices():
+      vector<IInputClass> fds = { self.touch, self.wacom, self.button}
+      for auto in : fds:
+        if in.fd > 0:
+          close(in.fd)
 
     ~Input():
-      close(self.touch.fd)
-      close(self.wacom.fd)
-      close(self.button.fd)
+      close_devices()
 
     void open_device(string fname):
       fd := open(fname.c_str(), O_RDWR)
@@ -249,6 +265,19 @@ namespace input:
       for auto fd : { self.touch.fd, self.wacom.fd, self.button.fd }:
         ioctl(fd, EVIOCGRAB, false)
 
+    void check_reopen():
+      vector<IInputClass*> inputs = { &self.wacom, &self.touch, &self.button }
+      needs_reopen := false
+      for auto in : inputs:
+        if in->reopen:
+          needs_reopen = true
+          break
+
+      if needs_reopen:
+        self.open_devices()
+
+      for auto in : inputs:
+        in->reopen = false
 
     void listen_all(long timeout_ms = 0):
       fd_set rdfs_cp
@@ -267,6 +296,9 @@ namespace input:
       else:
           retval = select(max_fd, &rdfs_cp, NULL, NULL, NULL)
 
+
+      // TODO: refactor this a bit so that the error handling is cleaner
+      // and we only re-open the specific device that fail
       if retval > 0:
         if FD_ISSET(self.wacom.fd, &rdfs_cp):
           self.wacom.handle_event_fd()
@@ -276,6 +308,8 @@ namespace input:
           self.button.handle_event_fd()
         if FD_ISSET(input::ipc_fd[0], &rdfs_cp):
           self.handle_ipc()
+
+        self.check_reopen()
 
       for auto ev : self.wacom.events:
         self.all_motion_events.push_back(self.wacom.marshal(ev))

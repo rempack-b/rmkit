@@ -4,6 +4,12 @@
 #include "../util/rotate.h"
 #include "../fb/fb_info.h"
 
+#ifndef ABS_MT_SLOT
+#define ABS_MT_SLOT		0x2f	/* MT slot being modified */
+#define SYN_DROPPED		3
+#define ABS_MT_DISTANCE		0x3b	/* Contact hover distance */
+#endif
+
 //#define DEBUG_INPUT_EVENT 1
 //#define DEBUG_INPUT_INIT 1
 namespace input:
@@ -175,6 +181,13 @@ namespace input:
       invert_y = true
       if not rm2fb::IN_RM2FB_SHIM:
         invert_x = true
+      #elif defined(RMKIT_FBINK) & defined(KOBO)
+      FBInkState state
+      FBInkConfig config
+      fbink_get_state(&config, &state)
+      invert_x = state.touch_mirror_x
+      invert_y = state.touch_mirror_y
+      swap_xy  = state.touch_swap_axes
       #elif KOBO
 
       version := util::get_kobo_version()
@@ -294,6 +307,8 @@ namespace input:
         case ABS_MT_PRESSURE:
           slots[slot].pressure = self.pressure = normalize(
             data.value, min_pressure, max_pressure, 0, 1)
+          if self.pressure == 0
+            self.left = 0
           break
 
     int max_touch_area():

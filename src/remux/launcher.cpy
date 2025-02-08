@@ -4,6 +4,7 @@
 #include <chrono>
 
 #include <time.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -22,20 +23,17 @@
 #include "config.h"
 
 #ifdef REMARKABLE
-#define TOUCH_FLOOD_EVENT ABS_DISTANCE
 #define DRAW_APP_BEHIND_MODAL
 #define READ_XOCHITL_DATA
 #define GRAB_INPUT
 #define SUSPENDABLE
 #elif KOBO
-#define TOUCH_FLOOD_EVENT ABS_MT_DISTANCE
 #define DYNAMIC_BPP
 #define HAS_ROTATION
 #define PORTRAIT_ONLY
 #define USE_GRAYSCALE_32BIT
-#else
-#define TOUCH_FLOOD_EVENT ABS_DISTANCE
 #endif
+
 
 TIMEOUT := 1
 // all time is in seconds
@@ -160,10 +158,11 @@ class AppBackground: public ui::Widget:
 
     vfb := self.get_vfb()
     debug "RENDERING", CURRENT_APP
-    if rm2fb::IN_RM2FB_SHIM:
-      fb->waveform_mode = WAVEFORM_MODE_GC16
-    else:
-      fb->waveform_mode = WAVEFORM_MODE_AUTO
+    #ifdef RMKIT_FBINK
+    fb->waveform_mode = WFM_AUTO
+    #else
+    fb->waveform_mode = WAVEFORM_MODE_GC16
+    #endif
 
     vfb->decompress(fb->fbmem)
 
@@ -338,6 +337,7 @@ class App: public IApp:
       debug "DISPLAYED LAUNCHER FOR", int_ms.count(), "MS"
       if int_ms.count() < MIN_DISPLAY_TIME:
         debug "NOT HIDING LAUNCHER BECAUSE INTERVAL < ", MIN_DISPLAY_TIME
+        app_dialog->show()
         return
 
       launch(CURRENT_APP)
@@ -467,6 +467,7 @@ class App: public IApp:
     _ := system("mkdir /run/ 2> /dev/null")
     _ = system("/usr/bin/mkfifo /run/remux.api 2>/dev/null")
     self.ipc_thread = new thread([=]() {
+      prctl(PR_SET_NAME, "fifo\0", 0, 0, 0)
       fd := open("/run/remux.api", O_RDONLY)
 
       string remainder = ""
@@ -496,6 +497,7 @@ class App: public IApp:
     debug "STARTING SUSPEND THREAD"
     version := util::get_remarkable_version()
     self.idle_thread = new thread([=]() {
+      prctl(PR_SET_NAME, "suspend\0", 0, 0, 0)
       last_wake := 0
       while true:
         now := time(NULL)
@@ -607,8 +609,8 @@ class App: public IApp:
       return
 
     #ifdef PORTRAIT_ONLY
-    debug "NOT SHOWING LAUNCHER IN LANDSCAPE"
     if fb->width > fb->height:
+      debug "NOT SHOWING LAUNCHER IN LANDSCAPE"
       return
     #endif
 
@@ -770,18 +772,35 @@ class App: public IApp:
     if write(fd, &ev, sizeof(ev)) != sizeof(ev):
       debug "COULDNT WRITE EV", errno
 
+  // Figures out what event is supported for flooding
+  uint16_t get_flood_event():
+    vector<uint16_t> features = { ABS_DISTANCE, ABS_MT_DISTANCE, ABS_PRESSURE }
+    vector<string> names = { "ABS_DISTANCE", "ABS_MT_DISTANCE", "ABS_PRESSURE" }
+
+    unsigned long bit[EV_MAX]
+    fd := ui::MainLoop::in.touch.fd
+    ioctl(fd, EVIOCGBIT(0, EV_MAX), bit)
+    for i := 0; i < len(features); i++:
+      if input::check_bit_set(fd, EV_ABS, features[i]):
+        debug "SETTING FLOOD EVENT TO", names[i], features[i]
+        return features[i]
+
+    // return ABS_DISTANCE by default
+    return ABS_DISTANCE
+
 
   input_event* build_touch_flood():
     n := 512 * 8
     num_inst := 4
     input_event *ev = (input_event*) malloc(sizeof(struct input_event) * n * num_inst)
     memset(ev, 0, sizeof(input_event) * n * num_inst)
+    flood_event := get_flood_event()
 
     i := 0
     while i < n:
-      ev[i++] = input_event{ type:EV_ABS, code:TOUCH_FLOOD_EVENT, value:1 }
+      ev[i++] = input_event{ type:EV_ABS, code:flood_event, value:1 }
       ev[i++] = input_event{ type:EV_SYN, code:0, value:0 }
-      ev[i++] = input_event{ type:EV_ABS, code:TOUCH_FLOOD_EVENT, value:2 }
+      ev[i++] = input_event{ type:EV_ABS, code:flood_event, value:2 }
       ev[i++] = input_event{ type:EV_SYN, code:0, value:0 }
 
     return ev
