@@ -15,6 +15,7 @@ KBD=`ls /dev/input/by-path/*kbd | head -n1`
 # NOTE: $FILES and $EXE NEED TO BE DEFINED
 RMKIT_IMPL="RMKIT_IMPLEMENTATION"
 OKP_FLAGS=-ig ${RMKIT_IMPL} -ns -ni -for -d ../.${APP}_cpp/ -o ../build/${EXE} ${FILES}
+#OKP_FLAGS=-ig ${RMKIT_IMPL} -ns -ni -for -d ../.${APP}_cpp/ ${FILES}
 
 # installation directory on remarkable
 DEST?=/opt/bin/
