@@ -84,7 +84,7 @@ namespace ui:
   class Pixmap: public Widget:
     public:
     CachedIcon icon = {NULL, 0}
-    remarkable_color alpha = 97
+    uint alpha = 0xFFFFFFFF
     Pixmap(int x, y, w, h, icons::Icon ico): Widget(x,y,w,h):
       self.icon = CachedIcon({ico.data, (int) ico.len, ico.name, self.w, self.h})
 

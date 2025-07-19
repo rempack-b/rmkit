@@ -18,7 +18,7 @@ namespace util:
         rgba_buf[j++] = resize_buffer[i]
         rgba_buf[j++] = resize_buffer[i]
         rgba_buf[j++] = resize_buffer[i]
-        rgba_buf[j++] = resize_buffer[i]
+        rgba_buf[j++] = 0xFF
 
       free(resize_buffer)
       resize_buffer = (unsigned char*) rgba_buf
